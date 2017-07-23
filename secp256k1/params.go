@@ -57,23 +57,26 @@ func (curve *CurveParams) ScalarBaseMult(k []byte) (*big.Int, *big.Int) {
 }
 
 func (curve *CurveParams) ScalarMult(Bx, By *big.Int, k []byte) (*big.Int, *big.Int) {
-  Rx := new(big.Int).SetBytes(Bx.Bytes())
-  Ry := new(big.Int).SetBytes(By.Bytes())
+  Rx := new(big.Int).Set(Bx)
+  Ry := new(big.Int).Set(By)
 
   var AccX *big.Int
   var AccY *big.Int
 
-  for _, byte := range k {
-    for bitNumber := 7; bitNumber != -1; bitNumber-- {
-      if byte >> uint(bitNumber) & 1 == 1 {
+  // LSB First
+  for i := len(k) - 1; i > -1; i-- {
+    byte := k[i]
+    for bitnumber := 0; bitnumber < 8; bitnumber++ {
+      if byte & 1 == 1 {
         if AccX == nil && AccY == nil {
-          AccX = new(big.Int).SetBytes(Rx.Bytes())
-          AccY = new(big.Int).SetBytes(Ry.Bytes())
+          AccX = new(big.Int).Set(Rx)
+          AccY = new(big.Int).Set(Ry)
         } else {
           AccX, AccY = curve.Add(AccX, AccY, Rx, Ry)
         }
       }
 
+      byte = byte >> 1
       Rx, Ry = curve.Double(Rx, Ry)
     }
   }
