@@ -29,6 +29,10 @@ func Sign(rand io.Reader, priv *ecdsa.PrivateKey, hash []byte) (*big.Int, *big.I
   return r, s, err
 }
 
+func Recover(curve elliptic.Curve, r, s *big.Int) (*PublicKey, *PublicKey, error) {
+  return nil, nil, nil
+}
+
 func Verify(pub *PublicKey, hash []byte, r, s *big.Int) bool {
   params := pub.Curve.Params()
 
