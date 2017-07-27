@@ -10,7 +10,7 @@ import (
   "math/big"
 //  "crypto/rand"
   "../secp256k1"
-//  "../ecdsa"
+  "../ecdsa"
   "errors"
   "fmt"
   "../elliptic"
@@ -35,7 +35,7 @@ func init() {
 type Config struct {
   Curve elliptic.Curve
   Message string
-  HashFunc hash.Hash
+  HashFunc *HashFunc
   R *big.Int
   S *big.Int
 }
@@ -54,19 +54,16 @@ func (curves *Curves) Add(curve elliptic.Curve) {
   *curves = append(*curves, curve)
 }
 
-func (curves Curves) IsSupported(name string) bool {
-  found := false
-
+func (curves Curves) Search(name string) (elliptic.Curve, bool) {
   name = strings.ToLower(name)
 
   for _, curve := range curves {
     if strings.ToLower(curve.Params().Name) == name {
-      found = true
-      break
+      return curve, true
     }
   }
 
-  return found
+  return nil, false
 }
 
 func (hashFuncs *HashFuncs) Add(name string, f hash.Hash) {
@@ -78,32 +75,29 @@ func (hashFuncs *HashFuncs) Add(name string, f hash.Hash) {
   *hashFuncs = append(*hashFuncs, hashFunc)
 }
 
-func (hashFuncs HashFuncs) IsSupported(name string) bool {
-  found := false
-
+func (hashFuncs HashFuncs) Search(name string) (*HashFunc, bool) {
   name = strings.ToLower(name)
 
   for _, hashFunc := range hashFuncs {
     if hashFunc.Name == name {
-      found = true
-      break
+      return hashFunc, true
     }
   }
 
-  return found
+  return nil, false
 }
 
 func parseArgs() (*Config, error) {
   var (
-    name, message string
-    hashFunc, r, s string
+    curveName, message string
+    hashFuncName, r, s string
     listCurves, listHashFuncs bool
   )
 
-  flag.StringVar(&name, "name", "", "Name of the curve.")
+  flag.StringVar(&curveName, "name", "", "Name of the curve.")
   flag.BoolVar(&listCurves, "list_curves", false, "List all supported curves.")
   flag.BoolVar(&listHashFuncs, "list_hash_functions", false, "List all supported hash functions.")
-  flag.StringVar(&hashFunc,"hash", "sha256", "Select hash function.")
+  flag.StringVar(&hashFuncName,"hash", "sha256", "Select hash function.")
   flag.StringVar(&message, "message", "", "Message that goes with signature r,s.")
   flag.StringVar(&r, "r", "", "R part of the signature in hex/bin/dec.")
   flag.StringVar(&s, "s", "", "S part of the signature in hex/bin/dec.")
@@ -126,12 +120,8 @@ func parseArgs() (*Config, error) {
     return nil, NewFlagError("")
   }
 
-  if name == "" {
+  if curveName == "" {
     return nil, NewFlagError("-name is mandatory and should be one of the supported curve")
-  }
-
-  if r == "" {
-    return nil, NewFlagError("-r is mandatory")
   }
 
   if r == "" {
@@ -142,8 +132,18 @@ func parseArgs() (*Config, error) {
     return nil, NewFlagError("-s is mandatory")
   }
 
-  if ! SupportedCurves.IsSupported(name) {
+  if message == "" {
+    return nil, NewFlagError("-message is mandatory")
+  }
+
+  curve, found := SupportedCurves.Search(curveName)
+  if ! found {
     return nil, NewFlagError("-name should be one of -list_curves")
+  }
+
+  hashFunc, found := SupportedHashFuncs.Search(hashFuncName)
+  if ! found {
+    return nil, NewFlagError("-hash should be one of -list_hash_functions")
   }
 
   R, ok := new(big.Int).SetString(r, 0)
@@ -156,9 +156,15 @@ func parseArgs() (*Config, error) {
     return nil, NewFlagError("-s is neither in hex, doc or bin")
   }
 
-  fmt.Println(S, R)
+  config := &Config{
+    R: R,
+    S: S,
+    Message: message,
+    HashFunc: hashFunc,
+    Curve: curve,
+  }
 
-  return nil, nil
+  return config, nil
 }
 
 type FlagError struct {
@@ -196,33 +202,13 @@ func main() {
     panic(errors.New(message))
   }
 
-  fmt.Println(config)
+  config.HashFunc.Func.Write([]byte(config.Message))
+  hash := config.HashFunc.Func.Sum(nil)
 
-//  r, _ := new(big.Int).SetString("456C52550B86BDE8243D34F75B7ECFCD4529836BF14E0215495FB26BD875C84E", 16)
-//  s, _ := new(big.Int).SetString("65579FB5B5D0BEF50C70D1C7E59870A4272D875FFE851870939DC80A9DAD9CF9", 16)
-//  X, _ := new(big.Int).SetString("96860f36f24bd621ad15cd9462e1c06c42038406a355eda8d64b27c7f1b1ea22", 16)
-//  Y, _ := new(big.Int).SetString("9f1f54dd01f70e6185bef7c8cf250b8527593ba13ecc73ec9ae2b4c7a9f370d7", 16)
-//  D, _ := new(big.Int).SetString("17536788293279665543056757257736289267388803240572974354862148677541593326046", 10)
+  pub1, pub2 := ecdsa.Recover(config.Curve, hash, config.R, config.S)
 
-//  pub := &ecdsa.PublicKey{
-//    secp256k1.Curve,
-//    X,
-//    Y,
-//  }
+  fmt.Printf("x1: %x\ty1: %x\n", pub1.X, pub1.Y)
+  fmt.Printf("x2: %x\ty2: %x\n", pub2.X, pub2.Y)
 
-//  priv := &ecdsa.PrivateKey{
-//    *pub,
-//    D,
-//  }
-
-//  hash, _ := hex.DecodeString("31f7a65e315586ac198bd798b6629ce4903d0899476d5741a9f32e2e521b6a66")
-//  hash, _ := new(big.Int).SetString("61068175463767656649243450861611941262877802461254223945978289328437287147697", 10)
-//  fmt.Println(len(hash.Bytes()))
-
-//  r, s, _ = ecdsa.Sign(rand.Reader, priv, hash)
-//  priv, _ := ecdsa.GenerateKey(secp256k1.Curve, rand.Reader)
-//  fmt.Println(priv.X, priv.Y)
-
-//  fmt.Println(pub)
 //  fmt.Println(ecdsa.Recover(secp256k1.Curve, hash, r, s))
 }

@@ -29,7 +29,7 @@ func Sign(rand io.Reader, priv *ecdsa.PrivateKey, hash []byte) (*big.Int, *big.I
   return r, s, err
 }
 
-func Recover(curve elliptic.Curve, hash []byte, r, s *big.Int) (*PublicKey, *PublicKey, error) {
+func Recover(curve elliptic.Curve, hash []byte, r, s *big.Int) (*PublicKey, *PublicKey) {
   pub1 := &PublicKey{
     curve,
     nil,
@@ -63,7 +63,7 @@ func Recover(curve elliptic.Curve, hash []byte, r, s *big.Int) (*PublicKey, *Pub
   pub1.X, pub1.Y = curve.ScalarMult(add1x, add1y, rInverse)
   pub2.X, pub2.Y = curve.ScalarMult(add2x, add2y, rInverse)
 
-  return pub1, pub2, nil
+  return pub1, pub2
 }
 
 func Verify(pub *PublicKey, hash []byte, r, s *big.Int) bool {
