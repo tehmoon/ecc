@@ -2,7 +2,7 @@ package ecdsa
 
 import (
   "crypto/ecdsa"
-  "crypto/elliptic"
+  "../elliptic"
   "io"
   "math/big"
 )
@@ -29,8 +29,41 @@ func Sign(rand io.Reader, priv *ecdsa.PrivateKey, hash []byte) (*big.Int, *big.I
   return r, s, err
 }
 
-func Recover(curve elliptic.Curve, r, s *big.Int) (*PublicKey, *PublicKey, error) {
-  return nil, nil, nil
+func Recover(curve elliptic.Curve, hash []byte, r, s *big.Int) (*PublicKey, *PublicKey, error) {
+  pub1 := &PublicKey{
+    curve,
+    nil,
+    nil,
+  }
+
+  pub2 := &PublicKey{
+    curve,
+    nil,
+    nil,
+  }
+
+  params := curve.Params()
+
+  Ry1, Ry2 := curve.SolveY(r)
+
+  rInverse := new(big.Int).ModInverse(r, params.N).Bytes()
+
+  S := s.Bytes()
+
+  sRx1, sRy1 := curve.ScalarMult(r, Ry1, S)
+  sRx2, sRy2 := curve.ScalarMult(r, Ry2, S)
+
+  zGx, zGy := curve.ScalarMult(params.Gx, params.Gy, hash)
+
+  zGy.Sub(params.P, zGy)
+
+  add1x, add1y := curve.Add(sRx1, sRy1, zGx, zGy)
+  add2x, add2y := curve.Add(sRx2, sRy2, zGx, zGy)
+
+  pub1.X, pub1.Y = curve.ScalarMult(add1x, add1y, rInverse)
+  pub2.X, pub2.Y = curve.ScalarMult(add2x, add2y, rInverse)
+
+  return pub1, pub2, nil
 }
 
 func Verify(pub *PublicKey, hash []byte, r, s *big.Int) bool {

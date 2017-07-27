@@ -10,6 +10,20 @@ type CurveParams struct {
   A *big.Int
 }
 
+func (curve *CurveParams) SolveY(x *big.Int) (*big.Int, *big.Int) {
+  // y^2 = x^3 + 0x + 7
+  three := new(big.Int).SetInt64(3)
+  xcube := new(big.Int).Exp(x, three, curve.P)
+
+  ysquare := new(big.Int).Add(xcube, curve.B)
+
+  y1 := new(big.Int).ModSqrt(ysquare, curve.P)
+
+  y2 := new(big.Int).Sub(curve.P, y1)
+
+  return y1, y2
+}
+
 func (curve *CurveParams) Add(Px, Py, Qx, Qy *big.Int) (*big.Int, *big.Int) {
   // S = ( Py - Qy ) / ( Px - Qx )
   // Rx = S**2 - ( Px + Qx )
